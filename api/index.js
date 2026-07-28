@@ -75,14 +75,27 @@ function detectType(title, text) {
   return '🔴 Notification';
 }
 
-// ---------- 📅 Smart Date Extraction ----------
+// ---------- 📅 Smart Date Extraction (More Formats) ----------
 function extractDate(text) {
+  // Check for "today" / "आज" / "yesterday" / "कल" first
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes('today') || lowerText.includes('आज')) {
+    return new Date(); // today's date
+  }
+  if (lowerText.includes('yesterday') || lowerText.includes('कल')) {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d;
+  }
+
+  // Standard patterns
   const patterns = [
     /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,
     /(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})/,
     /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,
     /(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i,
-    /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})/i
+    /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})/i,
+    /(\d{2})[-\/](\d{2})[-\/](\d{4})/  // MM-DD-YYYY
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -146,9 +159,9 @@ function timeAgo(date) {
   return 'Just now';
 }
 
-// ---------- ✅ Check if Date is within last 12 hours ----------
-function isWithinLast12Hours(date) {
-  if (!date) return false;
+// ---------- ✅ Check if Date is within last 12 hours (or no date) ----------
+function isRecent(date) {
+  if (!date) return true; // अगर Date न मिली, तो Recent मानें (ताकि Update न छूटे)
   const now = new Date();
   const diffInHours = (now - date) / (1000 * 60 * 60);
   return diffInHours <= 12;
@@ -196,11 +209,9 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
       // Page Link
       const pageLink = pageUrl;
 
-      // Date & Check 12 Hour Filter
+      // Date & Check 12 Hour Filter (with fallback)
       const dateObj = extractDate(text);
-      
-      // ⏰ 12 Hours Filter – सिर्फ 12 घंटे के अंदर के Updates लें
-      if (!isWithinLast12Hours(dateObj)) {
+      if (!isRecent(dateObj)) {
         return; // पुराने Updates को Skip करें
       }
 
@@ -256,7 +267,7 @@ async function scrapeWebsite(site) {
       if (result.updates.length > 0) {
         allUpdates = allUpdates.concat(result.updates);
         allPdfs = allPdfs.concat(result.pdfs);
-        console.log(`  ✅ ${site.name} → /${path}: ${result.updates.length} updates (last 12 hrs)`);
+        console.log(`  ✅ ${site.name} → /${path}: ${result.updates.length} updates (recent)`);
       }
     } catch {
       // Skip silently
@@ -299,7 +310,7 @@ async function scrapeAll() {
   
   history.unshift({
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-    desc: `✅ Scanned ${websites.length} websites, ${allUpdates.length} updates found (last 12 hours)`,
+    desc: `✅ Scanned ${websites.length} websites, ${allUpdates.length} updates found (recent)`,
     type: 'scan'
   });
 
