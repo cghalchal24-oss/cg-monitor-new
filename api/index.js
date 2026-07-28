@@ -35,7 +35,7 @@ const websites = [
   }))
 ];
 
-// ---------- 🔑 More Keywords ----------
+// ---------- 🔑 Keywords ----------
 const keywordMap = {
   '🔴 Notification': [
     'notice','notification','press release','circular','सूचना','अधिसूचना',
@@ -61,7 +61,7 @@ const keywordMap = {
     'परीक्षा कार्यक्रम','special educator','PM Shri','योजना','आवेदन','अस्थायी',
     'temporary','direct recruitment','सीधी भर्ती','court','न्यायालय','जिला',
     'अधिवक्ता','अधीनस्थ','न्यायिक','कर्मचारी','पद','पोस्ट','नियुक्ति','appointment',
-    'अधिसूचना','परीक्षा','exam','test','interview','साक्षात्कार','अंकसूची'
+    'परीक्षा','exam','test','interview','साक्षात्कार','अंकसूची'
   ]
 };
 
@@ -75,18 +75,80 @@ function detectType(title, text) {
   return '🔴 Notification';
 }
 
-// ---------- 📅 Date Extract ----------
+// ---------- 📅 Date Extract (बेहतर) ----------
 function extractDate(text) {
+  // Patterns: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, DD Month YYYY, etc.
   const patterns = [
-    /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,
-    /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,
-    /(\d{2})[-\/](\d{2})[-\/](\d{4})/
+    /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,          // DD/MM/YYYY
+    /(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})/,          // DD/MM/YY
+    /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,          // YYYY-MM-DD
+    /(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i, // DD Month YYYY
+    /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})/i // DD Mon YYYY
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
-    if (match) return match[0];
+    if (match) {
+      let day, month, year;
+      if (pattern.source.includes('Month') || pattern.source.includes('Mon')) {
+        // Named month
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const monthAbbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        let monthStr = match[2];
+        day = parseInt(match[1]);
+        year = parseInt(match[3]);
+        if (monthStr.length <= 3) {
+          month = monthAbbr.indexOf(monthStr) + 1;
+        } else {
+          month = monthNames.indexOf(monthStr) + 1;
+        }
+        if (month === 0) continue;
+      } else if (match.length === 4) {
+        // Numeric
+        if (match[1].length === 4) {
+          // YYYY-MM-DD
+          year = parseInt(match[1]);
+          month = parseInt(match[2]);
+          day = parseInt(match[3]);
+        } else {
+          // DD/MM/YYYY or DD/MM/YY
+          day = parseInt(match[1]);
+          month = parseInt(match[2]);
+          year = parseInt(match[3]);
+          if (year < 100) year += 2000;
+        }
+      }
+      if (day && month && year) {
+        return new Date(year, month - 1, day);
+      }
+    }
   }
   return null;
+}
+
+// ---------- ⏱️ Time Ago Function ----------
+function timeAgo(date) {
+  if (!date) return 'Just now';
+  const now = new Date();
+  const diff = now - date; // milliseconds
+  if (diff < 0) return 'Just now'; // future date? fallback
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) {
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days} days ago`;
+    return `${Math.floor(days / 7)} weeks ago`;
+  }
+  if (hours > 0) {
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  }
+  if (minutes > 0) {
+    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  }
+  return 'Just now';
 }
 
 // ---------- 🎯 Page से Updates Extract करें ----------
@@ -132,7 +194,10 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
       // Page Link - यही पेज
       const pageLink = pageUrl;
 
-      const date = extractDate(text);
+      // Date Extract & Time Ago
+      const dateObj = extractDate(text);
+      const timeStr = dateObj ? timeAgo(dateObj) : 'Just now';
+
       const type = detectType(text, text);
       const icon = type.split(' ')[0];
       const title = text.substring(0, 180).trim();
@@ -141,7 +206,7 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
         dept: siteName,
         icon: icon || '📄',
         title: title,
-        time: date ? `${date}` : 'just now',
+        time: timeStr,   // ✅ अब Time Ago दिखेगा
         type: type,
         pdf: pdfHref,
         link: pageLink
@@ -159,30 +224,30 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
   }
 }
 
-// ---------- 🔥 Smart Scraper - पूरी वेबसाइट Scan करेगा ----------
+// ---------- 🔥 Smart Scraper - Sub-pages Scan ----------
 async function scrapeWebsite(site) {
   console.log(`🔍 Scanning: ${site.name} (${site.url})`);
   
   let allUpdates = [];
   let allPdfs = [];
 
-  // 1. पहले Homepage Scan करें
+  // Homepage
   const homeResult = await extractUpdatesFromPage(site.url, site.name);
   allUpdates = allUpdates.concat(homeResult.updates);
   allPdfs = allPdfs.concat(homeResult.pdfs);
 
-  // 2. Common Pages भी Scan करें
+  // Common paths (हिंदी + English)
   const commonPaths = [
     'notice', 'recruitment', 'tender', 'result', 'admit-card',
     'news', 'announcement', 'vacancy', 'career', 'notification',
     'latest', 'update', 'advertisement', 'publication',
     'notices', 'recruitments', 'tenders', 'results',
-    'admitcard', 'answer-key', 'merit-list', 'meritlist'
+    'admitcard', 'answer-key', 'merit-list', 'meritlist',
+    'सूचना', 'भर्ती', 'परिणाम', 'प्रवेश-पत्र', 'निविदा'
   ];
 
   for (const path of commonPaths) {
     const pageUrl = site.url.endsWith('/') ? site.url + path : site.url + '/' + path;
-    // सिर्फ उन्हीं पेजों को Scan करें जो 404 न हों
     try {
       const result = await extractUpdatesFromPage(pageUrl, site.name);
       if (result.updates.length > 0) {
@@ -191,11 +256,11 @@ async function scrapeWebsite(site) {
         console.log(`  ✅ Found ${result.updates.length} updates on /${path}`);
       }
     } catch {
-      // 404 या अन्य Error – साइलेंट स्किप करें
+      // 404 or error – skip silently
     }
   }
 
-  // Duplicates हटाएँ (same title से)
+  // Duplicates remove
   const seen = new Set();
   const uniqueUpdates = allUpdates.filter(u => {
     const key = u.title.substring(0, 50);
@@ -207,7 +272,7 @@ async function scrapeWebsite(site) {
   return { updates: uniqueUpdates.slice(0, 20), pdfs: allPdfs.slice(0, 15) };
 }
 
-// ---------- सभी साइटों को Scan करें ----------
+// ---------- सभी साइटों को Scan ----------
 async function scrapeAll() {
   const results = await Promise.all(websites.map(site => scrapeWebsite(site)));
   let allUpdates = [], allPdfs = [], history = [];
