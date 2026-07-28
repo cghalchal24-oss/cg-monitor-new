@@ -8,8 +8,9 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// ---------- 📌 Websites ----------
+// ---------- 📌 Websites (40+ Sites) ----------
 const websites = [
+  // मुख्य विभाग
   { name: 'CG Vyapam', url: 'https://cgvyapam.choice.gov.in/' },
   { name: 'CGPSC', url: 'https://psc.cg.gov.in/' },
   { name: 'High Court', url: 'https://highcourt.cg.gov.in/' },
@@ -20,9 +21,11 @@ const websites = [
   { name: 'CG Jansampark', url: 'https://jansampark.cg.gov.in/' },
   { name: 'CGSSB', url: 'https://cgssb.cgstate.gov.in/' },
   { name: 'Edu Portal', url: 'https://eduportal.cg.nic.in/' },
+  // District Courts
   { name: 'Balrampur Court', url: 'https://balrampur.dcourts.gov.in/' },
   { name: 'Bilaspur Court', url: 'https://bilaspur.dcourts.gov.in/' },
   { name: 'Raipur Court', url: 'https://raipur.dcourts.gov.in/' },
+  // 33 Districts
   ...['balod','balodabazar','balrampur','bastar','bemetara','bijapur','bilaspur',
     'dantewada','dhamtari','durg','gariaband','janjgir-champa','jashpur','kawardha',
     'kanker','kondagaon','korba','korea','mahasamund','mungeli','narayanpur',
@@ -35,7 +38,7 @@ const websites = [
   }))
 ];
 
-// ---------- 🔑 Keywords ----------
+// ---------- 🔑 Keywords (Hindi + English) ----------
 const keywordMap = {
   '🔴 Notification': [
     'notice','notification','press release','circular','सूचना','अधिसूचना',
@@ -75,22 +78,20 @@ function detectType(title, text) {
   return '🔴 Notification';
 }
 
-// ---------- 📅 Date Extract (बेहतर) ----------
+// ---------- 📅 Smart Date Extraction ----------
 function extractDate(text) {
-  // Patterns: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, DD Month YYYY, etc.
   const patterns = [
-    /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,          // DD/MM/YYYY
-    /(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})/,          // DD/MM/YY
-    /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,          // YYYY-MM-DD
-    /(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i, // DD Month YYYY
-    /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})/i // DD Mon YYYY
+    /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,
+    /(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})/,
+    /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,
+    /(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i,
+    /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})/i
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
       let day, month, year;
       if (pattern.source.includes('Month') || pattern.source.includes('Mon')) {
-        // Named month
         const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
         const monthAbbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         let monthStr = match[2];
@@ -103,14 +104,11 @@ function extractDate(text) {
         }
         if (month === 0) continue;
       } else if (match.length === 4) {
-        // Numeric
         if (match[1].length === 4) {
-          // YYYY-MM-DD
           year = parseInt(match[1]);
           month = parseInt(match[2]);
           day = parseInt(match[3]);
         } else {
-          // DD/MM/YYYY or DD/MM/YY
           day = parseInt(match[1]);
           month = parseInt(match[2]);
           year = parseInt(match[3]);
@@ -125,12 +123,12 @@ function extractDate(text) {
   return null;
 }
 
-// ---------- ⏱️ Time Ago Function ----------
+// ---------- ⏱️ Time Ago ----------
 function timeAgo(date) {
   if (!date) return 'Just now';
   const now = new Date();
-  const diff = now - date; // milliseconds
-  if (diff < 0) return 'Just now'; // future date? fallback
+  const diff = now - date;
+  if (diff < 0) return 'Just now';
 
   const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -151,11 +149,11 @@ function timeAgo(date) {
   return 'Just now';
 }
 
-// ---------- 🎯 Page से Updates Extract करें ----------
+// ---------- 🎯 Scan Single Page ----------
 async function extractUpdatesFromPage(pageUrl, siteName) {
   try {
     const { data } = await axios.get(pageUrl, {
-      timeout: 10000,
+      timeout: 8000,
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
     const $ = cheerio.load(data);
@@ -166,8 +164,7 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
       'div','li','p','table','tr','td','section','article',
       '.notice','.news','.notification','.announcement','.recruitment',
       '.advertisement','.alert','.update','.latest','.important',
-      '.tender','.result','.admit','.merit','.answer','.content',
-      '.main-content','.entry-content','.post','.post-content'
+      '.tender','.result','.admit','.merit','.answer','.content'
     ];
 
     $('body').find(selectors.join(',')).each((i, el) => {
@@ -191,10 +188,10 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
         pdfHref = pageUrl.endsWith('/') ? pageUrl + pdfHref : pageUrl + '/' + pdfHref;
       }
 
-      // Page Link - यही पेज
+      // Page Link
       const pageLink = pageUrl;
 
-      // Date Extract & Time Ago
+      // Date & Time Ago
       const dateObj = extractDate(text);
       const timeStr = dateObj ? timeAgo(dateObj) : 'Just now';
 
@@ -206,7 +203,7 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
         dept: siteName,
         icon: icon || '📄',
         title: title,
-        time: timeStr,   // ✅ अब Time Ago दिखेगा
+        time: timeStr,
         type: type,
         pdf: pdfHref,
         link: pageLink
@@ -224,7 +221,7 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
   }
 }
 
-// ---------- 🔥 Smart Scraper - Sub-pages Scan ----------
+// ---------- 🔥 Smart Scraper – सिर्फ 6 Paths ----------
 async function scrapeWebsite(site) {
   console.log(`🔍 Scanning: ${site.name} (${site.url})`);
   
@@ -236,14 +233,10 @@ async function scrapeWebsite(site) {
   allUpdates = allUpdates.concat(homeResult.updates);
   allPdfs = allPdfs.concat(homeResult.pdfs);
 
-  // Common paths (हिंदी + English)
+  // ✅ सिर्फ आपके बताए 6 Paths
   const commonPaths = [
-    'notice', 'recruitment', 'tender', 'result', 'admit-card',
-    'news', 'announcement', 'vacancy', 'career', 'notification',
-    'latest', 'update', 'advertisement', 'publication',
-    'notices', 'recruitments', 'tenders', 'results',
-    'admitcard', 'answer-key', 'merit-list', 'meritlist',
-    'सूचना', 'भर्ती', 'परिणाम', 'प्रवेश-पत्र', 'निविदा'
+    'notice', 'recruitment', 'admit-card',
+    'answer-key', 'merit-list', 'vacancy'
   ];
 
   for (const path of commonPaths) {
@@ -253,14 +246,14 @@ async function scrapeWebsite(site) {
       if (result.updates.length > 0) {
         allUpdates = allUpdates.concat(result.updates);
         allPdfs = allPdfs.concat(result.pdfs);
-        console.log(`  ✅ Found ${result.updates.length} updates on /${path}`);
+        console.log(`  ✅ ${site.name} → /${path}: ${result.updates.length} updates`);
       }
     } catch {
-      // 404 or error – skip silently
+      // Skip silently
     }
   }
 
-  // Duplicates remove
+  // Remove duplicates (by title)
   const seen = new Set();
   const uniqueUpdates = allUpdates.filter(u => {
     const key = u.title.substring(0, 50);
@@ -272,7 +265,7 @@ async function scrapeWebsite(site) {
   return { updates: uniqueUpdates.slice(0, 20), pdfs: allPdfs.slice(0, 15) };
 }
 
-// ---------- सभी साइटों को Scan ----------
+// ---------- 🌐 Scan All Websites ----------
 async function scrapeAll() {
   const results = await Promise.all(websites.map(site => scrapeWebsite(site)));
   let allUpdates = [], allPdfs = [], history = [];
@@ -296,7 +289,7 @@ async function scrapeAll() {
   
   history.unshift({
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-    desc: `✅ Scanned ${websites.length} websites (with sub-pages), ${allUpdates.length} updates found`,
+    desc: `✅ Scanned ${websites.length} websites, ${allUpdates.length} updates found`,
     type: 'scan'
   });
 
