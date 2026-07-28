@@ -1,11 +1,14 @@
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const cors = require('cors');  // ← CORS जोड़ा गया
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- वेबसाइटों की सूची (41 साइटें) ----------
+app.use(cors()); // ← सभी Domains को Allow करता है
+
+// ---------- 33 जिले + मुख्य विभाग + Jansampark ----------
 const websites = [
   { name: 'CG Vyapam', url: 'https://cgvyapam.choice.gov.in/' },
   { name: 'CGPSC', url: 'https://psc.cg.gov.in/' },
@@ -136,7 +139,6 @@ async function scrapeAll() {
 
 let cache = { data: null, timestamp: null };
 
-// ---------- API Routes ----------
 app.get('/api/updates', async (req, res) => {
   const now = Date.now();
   if (!cache.timestamp || (now - cache.timestamp) > 180000) {
@@ -177,7 +179,6 @@ app.get('/api/download', async (req, res) => {
   }
 });
 
-// ---------- Health Check ----------
 app.get('/', (req, res) => {
   res.send('✅ CG Smart Monitor API is running');
 });
