@@ -8,9 +8,8 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// ---------- 📌 Websites (40+ Sites) ----------
+// ---------- 📌 Websites ----------
 const websites = [
-  // मुख्य विभाग
   { name: 'CG Vyapam', url: 'https://cgvyapam.choice.gov.in/' },
   { name: 'CGPSC', url: 'https://psc.cg.gov.in/' },
   { name: 'High Court', url: 'https://highcourt.cg.gov.in/' },
@@ -21,11 +20,9 @@ const websites = [
   { name: 'CG Jansampark', url: 'https://jansampark.cg.gov.in/' },
   { name: 'CGSSB', url: 'https://cgssb.cgstate.gov.in/' },
   { name: 'Edu Portal', url: 'https://eduportal.cg.nic.in/' },
-  // District Courts
   { name: 'Balrampur Court', url: 'https://balrampur.dcourts.gov.in/' },
   { name: 'Bilaspur Court', url: 'https://bilaspur.dcourts.gov.in/' },
   { name: 'Raipur Court', url: 'https://raipur.dcourts.gov.in/' },
-  // 33 Districts
   ...['balod','balodabazar','balrampur','bastar','bemetara','bijapur','bilaspur',
     'dantewada','dhamtari','durg','gariaband','janjgir-champa','jashpur','kawardha',
     'kanker','kondagaon','korba','korea','mahasamund','mungeli','narayanpur',
@@ -38,7 +35,7 @@ const websites = [
   }))
 ];
 
-// ---------- 🔑 Keywords (Hindi + English) ----------
+// ---------- 🔑 Keywords ----------
 const keywordMap = {
   '🔴 Notification': [
     'notice','notification','press release','circular','सूचना','अधिसूचना',
@@ -149,6 +146,14 @@ function timeAgo(date) {
   return 'Just now';
 }
 
+// ---------- ✅ Check if Date is within last 12 hours ----------
+function isWithinLast12Hours(date) {
+  if (!date) return false;
+  const now = new Date();
+  const diffInHours = (now - date) / (1000 * 60 * 60);
+  return diffInHours <= 12;
+}
+
 // ---------- 🎯 Scan Single Page ----------
 async function extractUpdatesFromPage(pageUrl, siteName) {
   try {
@@ -191,10 +196,15 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
       // Page Link
       const pageLink = pageUrl;
 
-      // Date & Time Ago
+      // Date & Check 12 Hour Filter
       const dateObj = extractDate(text);
-      const timeStr = dateObj ? timeAgo(dateObj) : 'Just now';
+      
+      // ⏰ 12 Hours Filter – सिर्फ 12 घंटे के अंदर के Updates लें
+      if (!isWithinLast12Hours(dateObj)) {
+        return; // पुराने Updates को Skip करें
+      }
 
+      const timeStr = dateObj ? timeAgo(dateObj) : 'Just now';
       const type = detectType(text, text);
       const icon = type.split(' ')[0];
       const title = text.substring(0, 180).trim();
@@ -221,7 +231,7 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
   }
 }
 
-// ---------- 🔥 Smart Scraper – सिर्फ 6 Paths ----------
+// ---------- 🔥 Smart Scraper – 6 Paths ----------
 async function scrapeWebsite(site) {
   console.log(`🔍 Scanning: ${site.name} (${site.url})`);
   
@@ -233,7 +243,7 @@ async function scrapeWebsite(site) {
   allUpdates = allUpdates.concat(homeResult.updates);
   allPdfs = allPdfs.concat(homeResult.pdfs);
 
-  // ✅ सिर्फ आपके बताए 6 Paths
+  // सिर्फ 6 Paths
   const commonPaths = [
     'notice', 'recruitment', 'admit-card',
     'answer-key', 'merit-list', 'vacancy'
@@ -246,14 +256,14 @@ async function scrapeWebsite(site) {
       if (result.updates.length > 0) {
         allUpdates = allUpdates.concat(result.updates);
         allPdfs = allPdfs.concat(result.pdfs);
-        console.log(`  ✅ ${site.name} → /${path}: ${result.updates.length} updates`);
+        console.log(`  ✅ ${site.name} → /${path}: ${result.updates.length} updates (last 12 hrs)`);
       }
     } catch {
       // Skip silently
     }
   }
 
-  // Remove duplicates (by title)
+  // Remove duplicates
   const seen = new Set();
   const uniqueUpdates = allUpdates.filter(u => {
     const key = u.title.substring(0, 50);
@@ -289,7 +299,7 @@ async function scrapeAll() {
   
   history.unshift({
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-    desc: `✅ Scanned ${websites.length} websites, ${allUpdates.length} updates found`,
+    desc: `✅ Scanned ${websites.length} websites, ${allUpdates.length} updates found (last 12 hours)`,
     type: 'scan'
   });
 
