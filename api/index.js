@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// ---------- 📌 सभी Websites (अब Court Sites भी जोड़ दी गई हैं) ----------
+// ---------- 📌 Websites ----------
 const websites = [
   // मुख्य विभाग
   { name: 'CG Vyapam', url: 'https://cgvyapam.choice.gov.in/' },
@@ -21,16 +21,11 @@ const websites = [
   { name: 'CG Jansampark', url: 'https://jansampark.cg.gov.in/' },
   { name: 'CGSSB', url: 'https://cgssb.cgstate.gov.in/' },
   { name: 'Edu Portal', url: 'https://eduportal.cg.nic.in/' },
-  
-  // ---------- जिला न्यायालय (District Courts) ----------
+  // District Courts
   { name: 'Balrampur Court', url: 'https://balrampur.dcourts.gov.in/' },
   { name: 'Bilaspur Court', url: 'https://bilaspur.dcourts.gov.in/' },
   { name: 'Raipur Court', url: 'https://raipur.dcourts.gov.in/' },
-  { name: 'Durg Court', url: 'https://durg.dcourts.gov.in/' },
-  { name: 'Bastar Court', url: 'https://bastar.dcourts.gov.in/' },
-  // और भी Courts जोड़ सकते हैं – pattern: https://<district>.dcourts.gov.in/
-
-  // 33 जिले (जिला मुख्यालय)
+  // 33 Districts
   ...['balod','balodabazar','balrampur','bastar','bemetara','bijapur','bilaspur',
     'dantewada','dhamtari','durg','gariaband','janjgir-champa','jashpur','kawardha',
     'kanker','kondagaon','korba','korea','mahasamund','mungeli','narayanpur',
@@ -43,34 +38,15 @@ const websites = [
   }))
 ];
 
-// ---------- 🔑 और भी Keywords (Hindi + English) ----------
+// ---------- 🔑 Keywords ----------
 const keywordMap = {
-  '🔴 Notification': [
-    'notice', 'notification', 'press release', 'circular', 'सूचना', 'अधिसूचना',
-    'विज्ञापन', 'advertisement', 'publication', 'प्रकाशन', 'नोटिस'
-  ],
-  '🟢 Admit Card': [
-    'admit card', 'hall ticket', 'call letter', 'प्रवेश पत्र', 'एडमिट कार्ड'
-  ],
-  '🔵 Result': [
-    'result', 'score', 'marks', 'rank', 'परिणाम', 'अंक', 'रिजल्ट'
-  ],
-  '🟡 Answer Key': [
-    'answer key', 'solution', 'response sheet', 'उत्तर कुंजी', 'आंसर की'
-  ],
-  '🟣 Merit List': [
-    'merit list', 'selected candidate', 'final list', 'मेरिट सूची', 'चयन सूची'
-  ],
-  '⚫ Tender': [
-    'tender', 'bid', 'quotation', 'contract', 'निविदा', 'टेंडर'
-  ],
-  '🟠 Recruitment': [
-    'recruitment', 'vacancy', 'apply', 'application', 'career',
-    'भर्ती', 'रिक्ति', 'परीक्षा कार्यक्रम',
-    'special educator', 'PM Shri', 'योजना', 'आवेदन', 'अस्थायी', 'temporary',
-    'direct recruitment', 'सीधी भर्ती', 'court', 'न्यायालय', 'जिला', 'अधिवक्ता',
-    'अधीनस्थ', 'न्यायिक', 'कर्मचारी', 'पद', 'पोस्ट'
-  ]
+  '🔴 Notification': ['notice','notification','press release','circular','सूचना','अधिसूचना','विज्ञापन','advertisement','publication','प्रकाशन','नोटिस'],
+  '🟢 Admit Card': ['admit card','hall ticket','call letter','प्रवेश पत्र','एडमिट कार्ड'],
+  '🔵 Result': ['result','score','marks','rank','परिणाम','अंक','रिजल्ट'],
+  '🟡 Answer Key': ['answer key','solution','response sheet','उत्तर कुंजी','आंसर की'],
+  '🟣 Merit List': ['merit list','selected candidate','final list','मेरिट सूची','चयन सूची'],
+  '⚫ Tender': ['tender','bid','quotation','contract','निविदा','टेंडर'],
+  '🟠 Recruitment': ['recruitment','vacancy','apply','application','career','भर्ती','रिक्ति','परीक्षा कार्यक्रम','special educator','PM Shri','योजना','आवेदन','अस्थायी','temporary','direct recruitment','सीधी भर्ती','court','न्यायालय','जिला','अधिवक्ता','अधीनस्थ','न्यायिक','कर्मचारी','पद','पोस्ट']
 };
 
 function detectType(title, text) {
@@ -97,7 +73,21 @@ function extractDate(text) {
   return null;
 }
 
-// ---------- 🔥 अल्टीमेट स्मार्ट स्क्रैपर ----------
+// ---------- Smart Guess: PDF से Page Link Guess करें ----------
+function guessPageUrl(pdfUrl, baseUrl) {
+  // अगर PDF URL में कोई Folder है, तो उसे Page मानें
+  try {
+    const url = new URL(pdfUrl);
+    const pathParts = url.pathname.split('/');
+    pathParts.pop(); // PDF filename हटाएँ
+    const pagePath = pathParts.join('/') + '/';
+    return url.origin + pagePath;
+  } catch {
+    return baseUrl;
+  }
+}
+
+// ---------- 🔥 Advanced Scraper ----------
 async function scrapeWebsite(site) {
   try {
     console.log(`🔍 Scanning: ${site.name} (${site.url})`);
@@ -109,7 +99,6 @@ async function scrapeWebsite(site) {
     const updates = [];
     const pdfs = [];
 
-    // 1. Specific classes जो अक्सर Updates में होते हैं
     const selectors = [
       'div', 'li', 'p', 'table', 'tr', 'td', 'section', 'article',
       '.notice', '.news', '.notification', '.announcement', '.recruitment',
@@ -137,16 +126,26 @@ async function scrapeWebsite(site) {
         pdfHref = site.url.endsWith('/') ? site.url + pdfHref : site.url + '/' + pdfHref;
       }
 
-      // Page URL (Visit Link)
-      const pageUrl = site.url;
+      // 🎯 Page Link: अगर PDF है तो उसका Parent Folder, नहीं तो Homepage
+      let pageLink = site.url;
+      if (pdfHref) {
+        pageLink = guessPageUrl(pdfHref, site.url);
+      } else {
+        // अगर कोई और Link है तो उसे Page मानें
+        const anyLink = $(el).find('a').first();
+        const href = anyLink.attr('href');
+        if (href) {
+          let fullLink = href;
+          if (!href.startsWith('http')) {
+            fullLink = site.url.endsWith('/') ? site.url + href : site.url + '/' + href;
+          }
+          pageLink = fullLink;
+        }
+      }
 
-      // Date Extract
       const date = extractDate(text);
-
-      // Type Detect
       const type = detectType(text, text);
       const icon = type.split(' ')[0];
-
       const title = text.substring(0, 180).trim();
 
       updates.push({
@@ -156,7 +155,7 @@ async function scrapeWebsite(site) {
         time: date ? `${date}` : 'just now',
         type: type,
         pdf: pdfHref,
-        link: pageUrl   // ✅ Visit Link (Page URL)
+        link: pageLink   // ✅ Smart Guess Page Link
       });
 
       if (pdfHref) {
@@ -176,7 +175,7 @@ async function scrapeWebsite(site) {
   }
 }
 
-// ---------- सभी साइटों को Scan करें ----------
+// ---------- सभी Scan करें ----------
 async function scrapeAll() {
   const results = await Promise.all(websites.map(site => scrapeWebsite(site)));
   let allUpdates = [], allPdfs = [], history = [];
