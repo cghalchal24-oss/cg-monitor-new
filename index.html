@@ -62,8 +62,14 @@
         body.dark .update-meta { color:#94a3b8; }
         .update-tag { background:#e2e8f0; padding:2px 12px; border-radius:40px; font-size:0.65rem; font-weight:600; color:#1e293b; }
         body.dark .update-tag { background:#334155; color:#e2e8f0; }
-        .update-pdf { margin-top:6px; display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#2563eb; cursor:pointer; }
-        body.dark .update-pdf { color:#60a5fa; }
+        .update-actions { display:flex; gap:12px; margin-top:8px; flex-wrap:wrap; }
+        .update-actions a { font-size:0.75rem; padding:4px 12px; border-radius:40px; text-decoration:none; font-weight:600; display:inline-flex; align-items:center; gap:6px; }
+        .download-btn { background:#dbeafe; color:#1e3a8a; }
+        .download-btn:hover { background:#bfdbfe; }
+        .visit-btn { background:#e5e7eb; color:#1e293b; }
+        .visit-btn:hover { background:#d1d5db; }
+        body.dark .download-btn { background:#1e3a5f; color:#93c5fd; }
+        body.dark .visit-btn { background:#334155; color:#e2e8f0; }
         .sidebar { display:flex; flex-direction:column; gap:20px; }
         .dept-card { background:#fff; border-radius:24px; padding:16px 18px; border:1px solid rgba(0,0,0,0.04); }
         body.dark .dept-card { background:#1e293b; border-color:#334155; }
@@ -95,6 +101,7 @@
         body.dark .history-item { border-bottom-color:#334155; }
         .history-item .h-time { color:#64748b; font-weight:500; }
         body.dark .history-item .h-time { color:#94a3b8; }
+        .history-item .h-desc { font-weight:500; }
         .history-item .h-badge { background:#e2e8f0; padding:0 10px; border-radius:40px; font-size:0.7rem; font-weight:600; }
         body.dark .history-item .h-badge { background:#334155; color:#e2e8f0; }
         .footer { margin-top:30px; text-align:center; font-size:0.85rem; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:20px; }
@@ -164,8 +171,8 @@
 
     <script>
         (function() {
-            // ---------- 🔥 यहाँ API_BASE बदलें ----------
-            const API_BASE = 'https://cg-monitor-new-1.onrender.com/api';  // ← Render URL डालें
+            // ---------- 🔥 API_BASE – अपने Render Backend URL से बदलें ----------
+            const API_BASE = 'https://cg-monitor-new-1.onrender.com/api';
 
             const districts = ["Balod","Baloda Bazar","Balrampur","Bastar","Bemetara","Bijapur","Bilaspur","Dantewada","Dhamtari","Durg","Gariaband","Gaurella-Pendra-Marwahi","Janjgir-Champa","Jashpur","Kabirdham","Kanker","Kondagaon","Khairagarh-Chhuikhadan-Gandai","Korba","Koriya","Mahasamund","Manendragarh-Chirmiri-Bharatpur","Mohla-Manpur-Ambagarh Chowki","Mungeli","Narayanpur","Raigarh","Raipur","Rajnandgaon","Sarangarh-Bilaigarh","Sakti","Sukma","Surajpur","Surguja"];
             const departments = ["CG Vyapam","CGPSC","NHM CG","Surguja University","Bilaspur University","Bastar University","High Court","CG Forest","CG Police","CSEB","Revenue Dept","Education Dept","Health Dept","Public Works","Housing Board","Women & Child","Social Welfare","Tribal Affairs","Panchayat","Urban Admin","Transport","Mines","Energy","Water Resources","Agriculture","Fisheries","Animal Husbandry","Cooperative"];
@@ -208,6 +215,19 @@
                 }
                 let html = '';
                 updates.forEach((u) => {
+                    // Build action buttons
+                    let actionsHtml = '';
+                    if (u.pdf) {
+                        actionsHtml += `<a href="${API_BASE}/download?url=${encodeURIComponent(u.pdf)}" target="_blank" class="download-btn"><i class="fas fa-file-pdf"></i> PDF Download</a>`;
+                    }
+                    if (u.link) {
+                        actionsHtml += `<a href="${u.link}" target="_blank" class="visit-btn"><i class="fas fa-external-link-alt"></i> Visit Page</a>`;
+                    }
+                    // If no pdf and no link, show a fallback message
+                    if (!actionsHtml) {
+                        actionsHtml = `<span style="font-size:0.7rem;color:#94a3b8;">No link available</span>`;
+                    }
+
                     html += `
                         <div class="update-item">
                             <div class="update-icon">${u.icon || '📄'}</div>
@@ -218,7 +238,9 @@
                                     <span><i class="far fa-clock"></i> ${u.time || 'just now'}</span>
                                     <span class="update-tag">${u.type || 'Update'}</span>
                                 </div>
-                                ${u.pdf ? `<div class="update-pdf" onclick="window.downloadPDF('${encodeURIComponent(u.pdf)}')"><i class="fas fa-file-pdf"></i> Download PDF</div>` : ''}
+                                <div class="update-actions">
+                                    ${actionsHtml}
+                                </div>
                             </div>
                         </div>
                     `;
@@ -285,7 +307,7 @@
                     
                     const now = new Date();
                     lastScanTime.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                    statusValue.innerHTML = `✔ <span style="font-size:1rem;">${data.totalSites || 41} Sites</span>`;
+                    statusValue.innerHTML = `✔ <span style="font-size:1rem;">${data.totalSites || 0} Sites</span>`;
                     
                     const count = data.updates ? data.updates.length : 0;
                     updatesCount.innerHTML = `${count} <span class="sub">today</span>`;
