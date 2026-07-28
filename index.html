@@ -7,17 +7,18 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        /* (CSS पहले जैसा ही रखें – यहाँ संक्षिप्त कर रहा हूँ) */
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Inter',sans-serif; background:#f4f6fa; color:#1e293b; padding:20px; transition:background 0.3s,color 0.3s; }
+        body { font-family:'Inter',sans-serif; background:#f4f6fa; color:#1e293b; padding:20px; transition:background 0.3s; }
         body.dark { background:#0f172a; color:#e2e8f0; }
         .container { max-width:1440px; margin:0 auto; }
         .header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; margin-bottom:30px; }
         .logo { display:flex; align-items:center; gap:12px; }
         .logo i { font-size:2.2rem; color:#2563eb; background:rgba(37,99,235,0.12); padding:12px; border-radius:16px; }
-        .logo h1 { font-size:1.8rem; font-weight:800; letter-spacing:-0.5px; }
+        .logo h1 { font-size:1.8rem; font-weight:800; }
         .logo span { color:#2563eb; }
         .header-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-        .theme-toggle { background:none; border:none; font-size:1.5rem; cursor:pointer; color:inherit; padding:8px 12px; border-radius:12px; background:rgba(255,255,255,0.08); transition:0.2s; }
+        .theme-toggle { background:none; border:none; font-size:1.5rem; cursor:pointer; color:inherit; padding:8px 12px; border-radius:12px; background:rgba(255,255,255,0.08); }
         .theme-toggle:hover { background:rgba(0,0,0,0.05); }
         .scan-btn { background:#2563eb; border:none; color:#fff; padding:10px 24px; border-radius:60px; font-weight:600; font-size:1rem; display:flex; align-items:center; gap:10px; cursor:pointer; transition:0.25s; box-shadow:0 8px 20px rgba(37,99,235,0.3); }
         .scan-btn:hover { background:#1d4ed8; transform:scale(1.02); }
@@ -171,7 +172,7 @@
 
     <script>
         (function() {
-            // ---------- 🔥 API_BASE – अपने Render Backend URL से बदलें ----------
+            // ---------- API_BASE (Render Backend) ----------
             const API_BASE = 'https://cg-monitor-new-1.onrender.com/api';
 
             const districts = ["Balod","Baloda Bazar","Balrampur","Bastar","Bemetara","Bijapur","Bilaspur","Dantewada","Dhamtari","Durg","Gariaband","Gaurella-Pendra-Marwahi","Janjgir-Champa","Jashpur","Kabirdham","Kanker","Kondagaon","Khairagarh-Chhuikhadan-Gandai","Korba","Koriya","Mahasamund","Manendragarh-Chirmiri-Bharatpur","Mohla-Manpur-Ambagarh Chowki","Mungeli","Narayanpur","Raigarh","Raipur","Rajnandgaon","Sarangarh-Bilaigarh","Sakti","Sukma","Surajpur","Surguja"];
@@ -197,6 +198,7 @@
             let isScanning = false;
             let theme = localStorage.getItem('cg-theme') || 'light';
             let telegramEnabled = true;
+            let abortController = null;
 
             function renderDepartments() {
                 const displayDepts = allDepts.slice(0, 100);
@@ -215,7 +217,6 @@
                 }
                 let html = '';
                 updates.forEach((u) => {
-                    // Build action buttons
                     let actionsHtml = '';
                     if (u.pdf) {
                         actionsHtml += `<a href="${API_BASE}/download?url=${encodeURIComponent(u.pdf)}" target="_blank" class="download-btn"><i class="fas fa-file-pdf"></i> PDF Download</a>`;
@@ -223,7 +224,6 @@
                     if (u.link) {
                         actionsHtml += `<a href="${u.link}" target="_blank" class="visit-btn"><i class="fas fa-external-link-alt"></i> Visit Page</a>`;
                     }
-                    // If no pdf and no link, show a fallback message
                     if (!actionsHtml) {
                         actionsHtml = `<span style="font-size:0.7rem;color:#94a3b8;">No link available</span>`;
                     }
@@ -292,12 +292,21 @@
                 if (isScanning) return;
                 isScanning = true;
                 scanBtn.disabled = true;
-                scanBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Scanning...`;
+                scanBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Scanning... (30s timeout)`;
                 document.querySelector('.stats-grid').classList.add('scanning');
                 statusValue.textContent = '⏳ Scanning...';
 
+                // AbortController for timeout
+                abortController = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    abortController.abort();
+                }, 30000);
+
                 try {
-                    const response = await fetch(`${API_BASE}/updates`);
+                    const response = await fetch(`${API_BASE}/updates`, {
+                        signal: abortController.signal
+                    });
+                    clearTimeout(timeoutId);
                     if (!response.ok) throw new Error('Backend error');
                     const data = await response.json();
 
@@ -315,14 +324,22 @@
 
                     showToast(`✅ ${count} real updates found!`);
                 } catch (err) {
-                    console.error(err);
+                    clearTimeout(timeoutId);
+                    let msg = '⚠️ Error fetching updates. ';
+                    if (err.name === 'AbortError') {
+                        msg += 'Request timed out (30s). Backend might be slow.';
+                    } else {
+                        msg += err.message || 'Please try again.';
+                    }
                     statusValue.textContent = '❌ Error';
-                    showToast('⚠️ Backend error. Please try again.', true);
+                    showToast(msg, true);
+                    console.error('Fetch error:', err);
                 } finally {
                     isScanning = false;
                     scanBtn.disabled = false;
                     scanBtn.innerHTML = `<i class="fas fa-sync-alt"></i> Auto Scan`;
                     document.querySelector('.stats-grid').classList.remove('scanning');
+                    abortController = null;
                 }
             }
 
@@ -371,7 +388,8 @@
 
             setTheme(theme);
             setTelegram(true);
-            setTimeout(fetchRealUpdates, 1500);
+            // Auto-fetch after load
+            setTimeout(fetchRealUpdates, 1000);
         })();
     </script>
 </body>
