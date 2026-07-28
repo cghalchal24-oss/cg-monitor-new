@@ -10,7 +10,6 @@ app.use(cors());
 
 // ---------- 📌 Websites ----------
 const websites = [
-  // मुख्य विभाग
   { name: 'CG Vyapam', url: 'https://cgvyapam.choice.gov.in/' },
   { name: 'CGPSC', url: 'https://psc.cg.gov.in/' },
   { name: 'High Court', url: 'https://highcourt.cg.gov.in/' },
@@ -21,11 +20,9 @@ const websites = [
   { name: 'CG Jansampark', url: 'https://jansampark.cg.gov.in/' },
   { name: 'CGSSB', url: 'https://cgssb.cgstate.gov.in/' },
   { name: 'Edu Portal', url: 'https://eduportal.cg.nic.in/' },
-  // District Courts
   { name: 'Balrampur Court', url: 'https://balrampur.dcourts.gov.in/' },
   { name: 'Bilaspur Court', url: 'https://bilaspur.dcourts.gov.in/' },
   { name: 'Raipur Court', url: 'https://raipur.dcourts.gov.in/' },
-  // 33 Districts
   ...['balod','balodabazar','balrampur','bastar','bemetara','bijapur','bilaspur',
     'dantewada','dhamtari','durg','gariaband','janjgir-champa','jashpur','kawardha',
     'kanker','kondagaon','korba','korea','mahasamund','mungeli','narayanpur',
@@ -38,15 +35,34 @@ const websites = [
   }))
 ];
 
-// ---------- 🔑 Keywords ----------
+// ---------- 🔑 More Keywords ----------
 const keywordMap = {
-  '🔴 Notification': ['notice','notification','press release','circular','सूचना','अधिसूचना','विज्ञापन','advertisement','publication','प्रकाशन','नोटिस'],
-  '🟢 Admit Card': ['admit card','hall ticket','call letter','प्रवेश पत्र','एडमिट कार्ड'],
-  '🔵 Result': ['result','score','marks','rank','परिणाम','अंक','रिजल्ट'],
-  '🟡 Answer Key': ['answer key','solution','response sheet','उत्तर कुंजी','आंसर की'],
-  '🟣 Merit List': ['merit list','selected candidate','final list','मेरिट सूची','चयन सूची'],
-  '⚫ Tender': ['tender','bid','quotation','contract','निविदा','टेंडर'],
-  '🟠 Recruitment': ['recruitment','vacancy','apply','application','career','भर्ती','रिक्ति','परीक्षा कार्यक्रम','special educator','PM Shri','योजना','आवेदन','अस्थायी','temporary','direct recruitment','सीधी भर्ती','court','न्यायालय','जिला','अधिवक्ता','अधीनस्थ','न्यायिक','कर्मचारी','पद','पोस्ट']
+  '🔴 Notification': [
+    'notice','notification','press release','circular','सूचना','अधिसूचना',
+    'विज्ञापन','advertisement','publication','प्रकाशन','नोटिस','आदेश','order'
+  ],
+  '🟢 Admit Card': [
+    'admit card','hall ticket','call letter','प्रवेश पत्र','एडमिट कार्ड'
+  ],
+  '🔵 Result': [
+    'result','score','marks','rank','परिणाम','अंक','रिजल्ट'
+  ],
+  '🟡 Answer Key': [
+    'answer key','solution','response sheet','उत्तर कुंजी','आंसर की'
+  ],
+  '🟣 Merit List': [
+    'merit list','selected candidate','final list','मेरिट सूची','चयन सूची'
+  ],
+  '⚫ Tender': [
+    'tender','bid','quotation','contract','निविदा','टेंडर'
+  ],
+  '🟠 Recruitment': [
+    'recruitment','vacancy','apply','application','career','भर्ती','रिक्ति',
+    'परीक्षा कार्यक्रम','special educator','PM Shri','योजना','आवेदन','अस्थायी',
+    'temporary','direct recruitment','सीधी भर्ती','court','न्यायालय','जिला',
+    'अधिवक्ता','अधीनस्थ','न्यायिक','कर्मचारी','पद','पोस्ट','नियुक्ति','appointment',
+    'अधिसूचना','परीक्षा','exam','test','interview','साक्षात्कार','अंकसूची'
+  ]
 };
 
 function detectType(title, text) {
@@ -73,26 +89,11 @@ function extractDate(text) {
   return null;
 }
 
-// ---------- Smart Guess: PDF से Page Link Guess करें ----------
-function guessPageUrl(pdfUrl, baseUrl) {
-  // अगर PDF URL में कोई Folder है, तो उसे Page मानें
+// ---------- 🎯 Page से Updates Extract करें ----------
+async function extractUpdatesFromPage(pageUrl, siteName) {
   try {
-    const url = new URL(pdfUrl);
-    const pathParts = url.pathname.split('/');
-    pathParts.pop(); // PDF filename हटाएँ
-    const pagePath = pathParts.join('/') + '/';
-    return url.origin + pagePath;
-  } catch {
-    return baseUrl;
-  }
-}
-
-// ---------- 🔥 Advanced Scraper ----------
-async function scrapeWebsite(site) {
-  try {
-    console.log(`🔍 Scanning: ${site.name} (${site.url})`);
-    const { data } = await axios.get(site.url, {
-      timeout: 12000,
+    const { data } = await axios.get(pageUrl, {
+      timeout: 10000,
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
     const $ = cheerio.load(data);
@@ -100,11 +101,13 @@ async function scrapeWebsite(site) {
     const pdfs = [];
 
     const selectors = [
-      'div', 'li', 'p', 'table', 'tr', 'td', 'section', 'article',
-      '.notice', '.news', '.notification', '.announcement', '.recruitment',
-      '.advertisement', '.alert', '.update', '.latest', '.important',
-      '.tender', '.result', '.admit', '.merit', '.answer'
+      'div','li','p','table','tr','td','section','article',
+      '.notice','.news','.notification','.announcement','.recruitment',
+      '.advertisement','.alert','.update','.latest','.important',
+      '.tender','.result','.admit','.merit','.answer','.content',
+      '.main-content','.entry-content','.post','.post-content'
     ];
+
     $('body').find(selectors.join(',')).each((i, el) => {
       const text = $(el).text().trim();
       if (!text || text.length < 10 || text.length > 800) return;
@@ -119,29 +122,15 @@ async function scrapeWebsite(site) {
       }
       if (!isUpdate) return;
 
-      // PDF Link ढूँढें
+      // PDF Link
       const pdfLink = $(el).find('a[href*=".pdf"]').first();
       let pdfHref = pdfLink.attr('href') || null;
       if (pdfHref && !pdfHref.startsWith('http')) {
-        pdfHref = site.url.endsWith('/') ? site.url + pdfHref : site.url + '/' + pdfHref;
+        pdfHref = pageUrl.endsWith('/') ? pageUrl + pdfHref : pageUrl + '/' + pdfHref;
       }
 
-      // 🎯 Page Link: अगर PDF है तो उसका Parent Folder, नहीं तो Homepage
-      let pageLink = site.url;
-      if (pdfHref) {
-        pageLink = guessPageUrl(pdfHref, site.url);
-      } else {
-        // अगर कोई और Link है तो उसे Page मानें
-        const anyLink = $(el).find('a').first();
-        const href = anyLink.attr('href');
-        if (href) {
-          let fullLink = href;
-          if (!href.startsWith('http')) {
-            fullLink = site.url.endsWith('/') ? site.url + href : site.url + '/' + href;
-          }
-          pageLink = fullLink;
-        }
-      }
+      // Page Link - यही पेज
+      const pageLink = pageUrl;
 
       const date = extractDate(text);
       const type = detectType(text, text);
@@ -149,13 +138,13 @@ async function scrapeWebsite(site) {
       const title = text.substring(0, 180).trim();
 
       updates.push({
-        dept: site.name,
+        dept: siteName,
         icon: icon || '📄',
         title: title,
         time: date ? `${date}` : 'just now',
         type: type,
         pdf: pdfHref,
-        link: pageLink   // ✅ Smart Guess Page Link
+        link: pageLink
       });
 
       if (pdfHref) {
@@ -164,18 +153,61 @@ async function scrapeWebsite(site) {
       }
     });
 
-    // Limit
-    const uniqueUpdates = updates.slice(0, 10);
-    const uniquePdfs = pdfs.slice(0, 8);
-
-    return { updates: uniqueUpdates, pdfs: uniquePdfs };
+    return { updates: updates.slice(0, 15), pdfs: pdfs.slice(0, 10) };
   } catch (err) {
-    console.error(`❌ ${site.name} error:`, err.message);
     return { updates: [], pdfs: [] };
   }
 }
 
-// ---------- सभी Scan करें ----------
+// ---------- 🔥 Smart Scraper - पूरी वेबसाइट Scan करेगा ----------
+async function scrapeWebsite(site) {
+  console.log(`🔍 Scanning: ${site.name} (${site.url})`);
+  
+  let allUpdates = [];
+  let allPdfs = [];
+
+  // 1. पहले Homepage Scan करें
+  const homeResult = await extractUpdatesFromPage(site.url, site.name);
+  allUpdates = allUpdates.concat(homeResult.updates);
+  allPdfs = allPdfs.concat(homeResult.pdfs);
+
+  // 2. Common Pages भी Scan करें
+  const commonPaths = [
+    'notice', 'recruitment', 'tender', 'result', 'admit-card',
+    'news', 'announcement', 'vacancy', 'career', 'notification',
+    'latest', 'update', 'advertisement', 'publication',
+    'notices', 'recruitments', 'tenders', 'results',
+    'admitcard', 'answer-key', 'merit-list', 'meritlist'
+  ];
+
+  for (const path of commonPaths) {
+    const pageUrl = site.url.endsWith('/') ? site.url + path : site.url + '/' + path;
+    // सिर्फ उन्हीं पेजों को Scan करें जो 404 न हों
+    try {
+      const result = await extractUpdatesFromPage(pageUrl, site.name);
+      if (result.updates.length > 0) {
+        allUpdates = allUpdates.concat(result.updates);
+        allPdfs = allPdfs.concat(result.pdfs);
+        console.log(`  ✅ Found ${result.updates.length} updates on /${path}`);
+      }
+    } catch {
+      // 404 या अन्य Error – साइलेंट स्किप करें
+    }
+  }
+
+  // Duplicates हटाएँ (same title से)
+  const seen = new Set();
+  const uniqueUpdates = allUpdates.filter(u => {
+    const key = u.title.substring(0, 50);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return { updates: uniqueUpdates.slice(0, 20), pdfs: allPdfs.slice(0, 15) };
+}
+
+// ---------- सभी साइटों को Scan करें ----------
 async function scrapeAll() {
   const results = await Promise.all(websites.map(site => scrapeWebsite(site)));
   let allUpdates = [], allPdfs = [], history = [];
@@ -194,19 +226,19 @@ async function scrapeAll() {
     }
   });
 
-  allUpdates = allUpdates.slice(0, 35);
-  allPdfs = allPdfs.slice(0, 20);
+  allUpdates = allUpdates.slice(0, 50);
+  allPdfs = allPdfs.slice(0, 30);
   
   history.unshift({
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-    desc: `✅ Scanned ${websites.length} websites, ${allUpdates.length} updates found`,
+    desc: `✅ Scanned ${websites.length} websites (with sub-pages), ${allUpdates.length} updates found`,
     type: 'scan'
   });
 
   return {
     updates: allUpdates,
     pdfs: allPdfs,
-    history: history.slice(0, 15),
+    history: history.slice(0, 20),
     totalSites: websites.length
   };
 }
