@@ -75,27 +75,22 @@ function detectType(title, text) {
   return '🔴 Notification';
 }
 
-// ---------- 📅 Smart Date Extraction (More Formats) ----------
+// ---------- 📅 Date Extraction ----------
 function extractDate(text) {
-  // Check for "today" / "आज" / "yesterday" / "कल" first
   const lowerText = text.toLowerCase();
-  if (lowerText.includes('today') || lowerText.includes('आज')) {
-    return new Date(); // today's date
-  }
+  if (lowerText.includes('today') || lowerText.includes('आज')) return new Date();
   if (lowerText.includes('yesterday') || lowerText.includes('कल')) {
     const d = new Date();
     d.setDate(d.getDate() - 1);
     return d;
   }
-
-  // Standard patterns
   const patterns = [
     /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,
     /(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})/,
     /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,
     /(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i,
     /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})/i,
-    /(\d{2})[-\/](\d{2})[-\/](\d{4})/  // MM-DD-YYYY
+    /(\d{2})[-\/](\d{2})[-\/](\d{4})/
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -107,11 +102,8 @@ function extractDate(text) {
         let monthStr = match[2];
         day = parseInt(match[1]);
         year = parseInt(match[3]);
-        if (monthStr.length <= 3) {
-          month = monthAbbr.indexOf(monthStr) + 1;
-        } else {
-          month = monthNames.indexOf(monthStr) + 1;
-        }
+        if (monthStr.length <= 3) month = monthAbbr.indexOf(monthStr) + 1;
+        else month = monthNames.indexOf(monthStr) + 1;
         if (month === 0) continue;
       } else if (match.length === 4) {
         if (match[1].length === 4) {
@@ -133,47 +125,70 @@ function extractDate(text) {
   return null;
 }
 
-// ---------- ⏱️ Time Ago ----------
 function timeAgo(date) {
   if (!date) return 'Just now';
   const now = new Date();
   const diff = now - date;
   if (diff < 0) return 'Just now';
-
   const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
-
   if (days > 0) {
     if (days === 1) return 'Yesterday';
     if (days < 7) return `${days} days ago`;
     return `${Math.floor(days / 7)} weeks ago`;
   }
-  if (hours > 0) {
-    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-  }
-  if (minutes > 0) {
-    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-  }
+  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
   return 'Just now';
 }
 
-// ---------- ✅ Check if Date is within last 12 hours (or no date) ----------
-function isRecent(date) {
-  if (!date) return true; // अगर Date न मिली, तो Recent मानें (ताकि Update न छूटे)
+function isRecentDate(date) {
+  if (!date) return true; // if no date, keep it (will show "Just now")
   const now = new Date();
   const diffInHours = (now - date) / (1000 * 60 * 60);
-  return diffInHours <= 12;
+  return diffInHours <= 12; // 12 hours filter
+}
+
+// ---------- 🔍 PDF URL से Year/Month Extract करें ----------
+function extractYearMonthFromUrl(url) {
+  const match = url.match(/\/uploads\/(\d{4})\/(\d{1,2})\//);
+  if (match) {
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]);
+    return { year, month };
+  }
+  return null;
+}
+
+// ---------- ✅ Check if PDF is recent (based on URL year/month) ----------
+function isRecentPdfByUrl(url) {
+  const ym = extractYearMonthFromUrl(url);
+  if (!ym) return true; // No date in URL – keep it (fallback)
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
+
+  // Allow current year and previous 2 months
+  if (ym.year === currentYear) {
+    // if month is within current month or previous 2 months
+    const monthDiff = currentMonth - ym.month;
+    if (monthDiff >= 0 && monthDiff <= 2) return true;
+  } else if (ym.year === currentYear - 1) {
+    // If year is previous year, allow only if month is near Dec? Actually we want last 2 months only
+    // But to keep it simple, allow if year is current year or previous year and month is in last 2 months overall.
+    // Better: calculate total month difference.
+    const totalMonths = (currentYear - ym.year) * 12 + (currentMonth - ym.month);
+    if (totalMonths >= 0 && totalMonths <= 2) return true;
+  }
+  return false; // older than 2 months
 }
 
 // ---------- 🎯 Scan Single Page ----------
 async function extractUpdatesFromPage(pageUrl, siteName) {
   try {
-    const { data } = await axios.get(pageUrl, {
-      timeout: 8000,
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
+    const { data } = await axios.get(pageUrl, { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } });
     const $ = cheerio.load(data);
     const updates = [];
     const pdfs = [];
@@ -206,14 +221,14 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
         pdfHref = pageUrl.endsWith('/') ? pageUrl + pdfHref : pageUrl + '/' + pdfHref;
       }
 
-      // Page Link
-      const pageLink = pageUrl;
-
-      // Date & Check 12 Hour Filter (with fallback)
-      const dateObj = extractDate(text);
-      if (!isRecent(dateObj)) {
-        return; // पुराने Updates को Skip करें
+      // 🆕 PDF URL Year/Month Filter
+      if (pdfHref && !isRecentPdfByUrl(pdfHref)) {
+        return; // Skip if PDF is older than 2 months based on URL
       }
+
+      const pageLink = pageUrl;
+      const dateObj = extractDate(text);
+      if (!isRecentDate(dateObj)) return; // Skip if text date is older than 12 hours (optional)
 
       const timeStr = dateObj ? timeAgo(dateObj) : 'Just now';
       const type = detectType(text, text);
@@ -245,21 +260,13 @@ async function extractUpdatesFromPage(pageUrl, siteName) {
 // ---------- 🔥 Smart Scraper – 6 Paths ----------
 async function scrapeWebsite(site) {
   console.log(`🔍 Scanning: ${site.name} (${site.url})`);
-  
-  let allUpdates = [];
-  let allPdfs = [];
+  let allUpdates = [], allPdfs = [];
 
-  // Homepage
   const homeResult = await extractUpdatesFromPage(site.url, site.name);
   allUpdates = allUpdates.concat(homeResult.updates);
   allPdfs = allPdfs.concat(homeResult.pdfs);
 
-  // सिर्फ 6 Paths
-  const commonPaths = [
-    'notice', 'recruitment', 'admit-card',
-    'answer-key', 'merit-list', 'vacancy'
-  ];
-
+  const commonPaths = ['notice', 'recruitment', 'admit-card', 'answer-key', 'merit-list', 'vacancy'];
   for (const path of commonPaths) {
     const pageUrl = site.url.endsWith('/') ? site.url + path : site.url + '/' + path;
     try {
@@ -269,9 +276,7 @@ async function scrapeWebsite(site) {
         allPdfs = allPdfs.concat(result.pdfs);
         console.log(`  ✅ ${site.name} → /${path}: ${result.updates.length} updates (recent)`);
       }
-    } catch {
-      // Skip silently
-    }
+    } catch {}
   }
 
   // Remove duplicates
@@ -286,7 +291,7 @@ async function scrapeWebsite(site) {
   return { updates: uniqueUpdates.slice(0, 20), pdfs: allPdfs.slice(0, 15) };
 }
 
-// ---------- 🌐 Scan All Websites ----------
+// ---------- 🌐 Scan All ----------
 async function scrapeAll() {
   const results = await Promise.all(websites.map(site => scrapeWebsite(site)));
   let allUpdates = [], allPdfs = [], history = [];
@@ -307,19 +312,13 @@ async function scrapeAll() {
 
   allUpdates = allUpdates.slice(0, 50);
   allPdfs = allPdfs.slice(0, 30);
-  
   history.unshift({
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-    desc: `✅ Scanned ${websites.length} websites, ${allUpdates.length} updates found (recent)`,
+    desc: `✅ Scanned ${websites.length} websites, ${allUpdates.length} updates (filtered)`,
     type: 'scan'
   });
 
-  return {
-    updates: allUpdates,
-    pdfs: allPdfs,
-    history: history.slice(0, 20),
-    totalSites: websites.length
-  };
+  return { updates: allUpdates, pdfs: allPdfs, history: history.slice(0, 20), totalSites: websites.length };
 }
 
 // ---------- CACHE ----------
@@ -335,12 +334,7 @@ app.get('/api/updates', async (req, res) => {
     } catch (err) {
       console.error('Scraping error:', err);
       if (cache.data) return res.json(cache.data);
-      return res.json({
-        updates: [],
-        pdfs: [],
-        history: [{ time: 'now', desc: 'Error fetching updates', type: 'error' }],
-        totalSites: websites.length
-      });
+      return res.json({ updates: [], pdfs: [], history: [{ time: 'now', desc: 'Error', type: 'error' }], totalSites: websites.length });
     }
   }
   res.json(cache.data);
@@ -350,6 +344,11 @@ app.get('/api/download', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'URL required' });
   try {
+    // Check if PDF exists
+    const headRes = await axios.head(url, { timeout: 5000 });
+    if (headRes.status !== 200) {
+      return res.status(404).json({ error: 'PDF not found on server' });
+    }
     const response = await axios({
       method: 'get',
       url: url,
@@ -361,7 +360,11 @@ app.get('/api/download', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     response.data.pipe(res);
   } catch (err) {
-    res.status(500).json({ error: 'Download failed' });
+    if (err.response && err.response.status === 404) {
+      res.status(404).json({ error: 'PDF not found on server' });
+    } else {
+      res.status(500).json({ error: 'Download failed' });
+    }
   }
 });
 
